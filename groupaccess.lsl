@@ -1,13 +1,16 @@
+string g_sGroupId = "6eb14ba3-f263-5660-bebf-3ea3dd8cd3fd";
+string g_sGroupInitials = "SR";
+
 integer g_iBuild = 1;
 
 string g_sAppVersion = "⁰⋅¹";
 
 string g_sParentMenu = "Apps";
-string g_sSubMenu = "Group Access";
+string g_sSubMenu = "SR Access";
 
-string g_sGroupId = "";
+string g_sMenuCommand = "sr access";
 
-string g_sSettingToken = "grpaccess_";
+string g_sSettingToken = "sraccess_";
 
 integer CMD_ZERO = 0;
 
@@ -73,7 +76,7 @@ Dialog(key kId, string sPrompt, list lChoices, list lUtilityButtons, integer iPa
 }
 
 ConfigMenu(key kId, integer iAuth) {
-    string sPrompt = "\nSR Access\n";
+    string sPrompt = "\n"+g_sSubMenu+"\n";
     list lMyButtons;
 
     if (kId == g_kWearer) {
@@ -99,20 +102,20 @@ saveTempOwners() {
     }
 }
 
-doCapture(string sCaptorID) {
+doCapture(string sCaptorID, string sCommand) {
     if (!g_iOn) return;
 
     if (g_sGroupId) {
         if (g_sGroupId != GetGroupKey(sCaptorID)) return;
 
-        llMessageLinked(LINK_DIALOG, NOTIFY, "0"+"Access granted to %WEARERNAME%'s %DEVICETYPE% by Sunstone Ranch Access plugin.", sCaptorID);
+        llMessageLinked(LINK_DIALOG, NOTIFY, "0"+"Access granted to %WEARERNAME%'s %DEVICETYPE% by "+g_sSubMenu+" app.", sCaptorID);
         g_sTempOwnerID = "";
         saveTempOwners();
         llSleep(1.0);
         g_sTempOwnerID = sCaptorID;
         saveTempOwners();
         llSleep(1.0);
-        llMessageLinked(LINK_AUTH,CMD_ZERO,"menu",sCaptorID);
+        if (sCommand) llMessageLinked(LINK_AUTH, CMD_ZERO, sCommand, sCaptorID);
 
         llSetTimerEvent(900.0);
     }
@@ -123,22 +126,19 @@ UserCommand(integer iNum, string sStr, key kId, integer remenu) {
     string sCommand = llToLower(llList2String(lParams, 0));
     string sAction = llToLower(llList2String(lParams, 1));
     string sLowerStr = llToLower(sStr);
-    if (llSubStringIndex(sStr,"sr access TempOwner") == 0){
-        string sCaptorID = llGetSubString(sStr,llSubStringIndex(sStr,"~")+1,-1);
-        if (iNum == CMD_OWNER || iNum == CMD_WEARER) { }
-        else {
-            doCapture(sCaptorID);
-        }
-    } else if (sLowerStr == "menu sr access" || sLowerStr == "sraccess") {
+
+    if (sLowerStr == g_sMenuCommand || sLowerStr == "sraccess") {
         ConfigMenu(kId, iNum);
     } else if (sCommand == "sraccess") {
         if (kId == g_kWearer) {
             if (sAction == "on") {
                 g_iOn = TRUE;
                 llMessageLinked(LINK_SAVE, LM_SETTING_SAVE,g_sSettingToken+"active=1", "");
+                llMessageLinked(LINK_DIALOG,NOTIFY,"0"+g_sSubMenu+" app is now active.", g_kWearer);
             } else if (sAction == "off") {
                 g_iOn = FALSE;
                 llMessageLinked(LINK_SAVE, LM_SETTING_DELETE,g_sSettingToken+"active", "");
+                llMessageLinked(LINK_DIALOG,NOTIFY,"0"+g_sSubMenu+" app is now inactive.", g_kWearer);
             }
         }
     }
@@ -152,32 +152,25 @@ default
 {
     state_entry() {
         g_kWearer = llGetOwner();
+        g_sSubMenu = g_sGroupInitials + " Access";
+        g_sMenuCommand = "menu " + llToLower(g_sSubMenu);
     }
 
     on_rez(integer iParam) {
         if (llGetOwner()!=g_kWearer)  llResetScript();
     }
 
-    touch_start(integer num_detected) {
-        key kToucher = llDetectedKey(0);
-        if (kToucher == g_kWearer) return;
-        if (g_sTempOwnerID == kToucher) return;
-        if (!g_iOn) return;
-        else llMessageLinked(LINK_AUTH,CMD_ZERO,"sraccess TempOwner~"+(string)kToucher,kToucher);
-    }
-
     link_message(integer iSender, integer iNum, string sStr, key kId) {
         if (iNum >= CMD_OWNER && iNum <= CMD_WEARER) {
             UserCommand(iNum, sStr, kId, FALSE);
+        } else if (iNum >= CMD_TRUSTED && iNum <= CMD_EVERYONE) {
+            if (g_iOn && kId != g_kWearer) {
+                doCapture(kId, sStr);
+            }
         } else if (iNum == MENUNAME_REQUEST && sStr == g_sParentMenu) {
             llMessageLinked(iSender, MENUNAME_RESPONSE, g_sParentMenu + "|" + g_sSubMenu, "");
-        } else if (iNum == CMD_SAFEWORD || (sStr == "runaway" && iNum == CMD_OWNER)) {
-            if (iNum == CMD_SAFEWORD && g_iOn) llMessageLinked(LINK_DIALOG,NOTIFY,"0"+"SR Access plugin deactivated.", g_kWearer);
-            if (llGetAgentSize(g_sTempOwnerID)) llMessageLinked(LINK_DIALOG,NOTIFY,"0"+"%WEARERNAME% has either run away or safeworded, SR Access plugin was deactivated.",g_sTempOwnerID);
-            g_iOn = FALSE;
-            llMessageLinked(LINK_SAVE, LM_SETTING_DELETE,g_sSettingToken+"active", "");
-            g_sTempOwnerID = "";
-            saveTempOwners();
+        } else if (iNum == CMD_SAFEWORD) {
+            if (llGetAgentSize(g_sTempOwnerID)) llMessageLinked(LINK_DIALOG,NOTIFY,"0"+"%WEARERNAME% has safeworded.", g_sTempOwnerID);
         } else if (iNum == LM_SETTING_RESPONSE) {
             list lParams = llParseString2List(sStr, ["="], []);
             string sToken = llList2String(lParams, 0);
