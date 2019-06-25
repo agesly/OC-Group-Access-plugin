@@ -1,16 +1,41 @@
-string g_sGroupId = "6eb14ba3-f263-5660-bebf-3ea3dd8cd3fd";
-string g_sGroupInitials = "SR";
+/*\
+ * Group Access Plugin for OpenCollar
+ * Author: Agesly Resident (agesly.danzig@gmail.com)
+ *
+ * If you want to modify this, please fork
+ * https://github.com/agesly/OC-Group-Access-plugin
+ *
+ * 
+ * Licensed under the GPLv2.  See LICENSE for full details.  
+\*/
+
+// CONFIGURATION
+
+// Group ID and initials
+string g_sGroupId = "";
+string g_sGroupInitials = "";
+
+// Tags in the group allowed to use the collar, if empty all tags will be allowed.
+list g_lGroupTags = [""];
+
+// End of configuration
+
+
+//////////////////////////////////////////
+// Nothing to edit beyond here ///////////
+//////////////////////////////////////////
+//////////////////////////////////////////
 
 integer g_iBuild = 1;
 
-string g_sAppVersion = "⁰⋅¹";
+string g_sAppVersion = "⁰⋅²";
 
 string g_sParentMenu = "Apps";
-string g_sSubMenu = "SR Access";
+string g_sSubMenu;
 
-string g_sMenuCommand = "sr access";
+string g_sMenuCommand;
 
-string g_sSettingToken = "sraccess_";
+string g_sSettingToken;
 
 integer CMD_ZERO = 0;
 
@@ -102,12 +127,17 @@ saveTempOwners() {
     }
 }
 
-doCapture(string sCaptorID, string sCommand) {
+grantAccess(string sCaptorID, string sStr) {
     if (!g_iOn) return;
 
     if (g_sGroupId) {
         if (g_sGroupId != GetGroupKey(sCaptorID)) return;
-
+        if (llGetListLength(g_lGroupTags) > 0) {
+            string groupTag = llList2String(llGetObjectDetails((key)sCaptorID, [OBJECT_GROUP_TAG]),0);
+            if (llListFindList(g_lGroupTags, (list) groupTag) == -1) {
+                return;
+            }
+        }
         llMessageLinked(LINK_DIALOG, NOTIFY, "0"+"Access granted to %WEARERNAME%'s %DEVICETYPE% by "+g_sSubMenu+" app.", sCaptorID);
         g_sTempOwnerID = "";
         saveTempOwners();
@@ -115,7 +145,7 @@ doCapture(string sCaptorID, string sCommand) {
         g_sTempOwnerID = sCaptorID;
         saveTempOwners();
         llSleep(1.0);
-        if (sCommand) llMessageLinked(LINK_AUTH, CMD_ZERO, sCommand, sCaptorID);
+        if (sStr) llMessageLinked(LINK_AUTH, CMD_ZERO, sStr, sCaptorID);
 
         llSetTimerEvent(900.0);
     }
@@ -154,6 +184,7 @@ default
         g_kWearer = llGetOwner();
         g_sSubMenu = g_sGroupInitials + " Access";
         g_sMenuCommand = "menu " + llToLower(g_sSubMenu);
+        g_sSettingToken = "_"+llToLower(g_sGroupInitials)+"_gaccess";
     }
 
     on_rez(integer iParam) {
@@ -165,7 +196,7 @@ default
             UserCommand(iNum, sStr, kId, FALSE);
         } else if (iNum >= CMD_TRUSTED && iNum <= CMD_EVERYONE) {
             if (g_iOn && kId != g_kWearer) {
-                doCapture(kId, sStr);
+                grantAccess(kId, sStr);
             }
         } else if (iNum == MENUNAME_REQUEST && sStr == g_sParentMenu) {
             llMessageLinked(iSender, MENUNAME_RESPONSE, g_sParentMenu + "|" + g_sSubMenu, "");
@@ -215,5 +246,6 @@ default
     {
         g_sTempOwnerID = "";
         saveTempOwners();
+        llSetTimerEvent(0.0);
     }
 }
